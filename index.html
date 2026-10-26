@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Clean Air Spaces Chiang Mai</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cabin:wght@500;600;700&family=Catamaran:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<link rel="stylesheet" href="styles.css?v=10">
+</head>
+<body>
+
+<header class="brandbar">
+  <div class="brandbar-inner">
+    <img class="brand-logo" src="assets/logo_white.png" alt="AirGradient">
+    <span class="brand-divider" aria-hidden="true"></span>
+    <span class="brand-title">Clean Air Spaces</span>
+    <span class="brand-pill">Prototype · simulated data</span>
+  </div>
+</header>
+
+<main class="stage">
+  <!-- The app as it would appear on a phone -->
+  <section class="device" aria-label="App prototype">
+    <div class="device-frame">
+      <div class="statusbar" aria-hidden="true"><span>9:41</span><span class="statusbar-icons">▮▮▮ ◖▬◗</span></div>
+      <div class="app" id="app">
+        <div id="map" class="map"></div>
+
+        <div class="pick-hint" id="pickHint" hidden>Tap the map to set your location</div>
+
+        <div class="top">
+          <div class="search-row">
+            <div class="search" id="searchBox">
+              <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>
+              <input id="search" type="search" placeholder="Search cafés, malls, museums" autocomplete="off" aria-label="Search places">
+              <div class="search-results" id="searchResults" hidden></div>
+            </div>
+            <button class="param" id="paramBtn" type="button" aria-label="Switch between PM2.5 and CO₂">
+              <span data-mode="pm" class="on">PM2.5</span><span data-mode="co2">CO₂</span>
+            </button>
+            <button class="round-btn" id="infoBtn" type="button" aria-label="Map legend">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
+            </button>
+          </div>
+
+          <div class="chips" id="chips" role="toolbar" aria-label="Filter by place type"></div>
+        </div>
+
+        <div class="sheet" id="sheet" data-state="peek">
+          <div class="sheet-fabs">
+            <button class="round-btn locate" id="locateBtn" type="button" aria-label="Show my location">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 21 3l-8 18-2-8-8-2Z"/></svg>
+            </button>
+          </div>
+          <button class="sheet-handle" id="sheetHandle" type="button" aria-label="Expand or collapse list"><i></i></button>
+          <div class="sheet-body" id="sheetBody"></div>
+        </div>
+
+        <div class="legend" id="legend" hidden></div>
+        <div class="toast" id="toast" role="status" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Simulation controls: not part of the app -->
+  <aside class="panel" id="panel" aria-label="Simulation controls">
+    <div class="panel-head">
+      <div>
+        <div class="eyebrow">Simulation</div>
+        <h1>Try different conditions</h1>
+      </div>
+      <button class="panel-close" id="panelClose" type="button" aria-label="Close simulation controls">✕</button>
+    </div>
+
+    <section class="ctl">
+      <label class="ctl-label" for="pmSlider">Outdoor PM2.5 across the city</label>
+      <div class="pm-readout"><span id="pmNum">90</span><small>µg/m³</small><span class="cat-chip" id="pmCat">Unhealthy</span></div>
+      <input id="pmSlider" class="pm-slider" type="range" min="0" max="300" step="1" value="90">
+      <div class="scale" aria-hidden="true"><span>0</span><span>50</span><span>100</span><span>150</span><span>200</span><span>250</span><span>300</span></div>
+      <div class="presets">
+        <button type="button" data-pm="12">Clean day</button>
+        <button type="button" data-pm="90">Typical March</button>
+        <button type="button" data-pm="200">Severe haze</button>
+      </div>
+      <p class="hint">Moves the outdoor air layer and the estimated indoor value of every measured place.</p>
+    </section>
+
+    <section class="ctl">
+      <label class="ctl-label" for="locSelect">Your location</label>
+      <select id="locSelect"></select>
+      <div class="loc-actions">
+        <button type="button" id="pickBtn">Pick on map</button>
+        <button type="button" id="gpsBtn">Use my GPS</button>
+      </div>
+      <p class="hint">You can also drag the blue dot on the map. Distances and "Cleanest near you" follow your location.</p>
+    </section>
+
+    <details class="about">
+      <summary>How the estimates work</summary>
+      <p>Each place has 1–5 simulated measurements, each pairing an indoor reading with an outdoor reading taken nearby at the same time, as in the AirGradient Go measurement flow.</p>
+      <p>The ratio between inside and outside tells how much outdoor smoke a place keeps out. The estimate on the map is that ratio applied to the outdoor air at the place right now.</p>
+      <p><strong>Clean Air Space</strong> means at least two measurements, each at most 30% of outside, and at least one taken on a polluted day.</p>
+      <p>About 40% of Clean Air Spaces are fully sealed: they stay below 5 µg/m³ inside whatever the outdoor level.</p>
+    </details>
+    <details class="about">
+      <summary>About this prototype</summary>
+      <p>Place names and locations are real, from OpenStreetMap. All air quality values are simulated and do not describe these places.</p>
+      <p>Map © OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors.</p>
+    </details>
+  </aside>
+  <button class="panel-open" id="panelOpen" type="button">Simulation</button>
+</main>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie_light.min.js"></script>
+<script src="data/places.js"></script>
+<script src="data/mascots.js"></script>
+<script src="app.js?v=10"></script>
+</body>
+</html>
