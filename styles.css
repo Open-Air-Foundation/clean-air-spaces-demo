@@ -44,16 +44,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .brandbar-inner {
   max-width: 1180px; margin: 0 auto;
   padding: 10px max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
-  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap; position: relative;
 }
 .brand-logo { height: 30px; width: auto; }
 .brand-divider { width: 1px; height: 22px; background: rgba(255, 255, 255, 0.4); }
 .brand-title { font-family: var(--font-brand); font-weight: 600; font-size: 19px; letter-spacing: 0.01em; }
+/* Centred in the bar, in the Spot warning orange so nobody mistakes the values for real ones */
 .brand-pill {
-  font-family: var(--font-brand); font-size: 12px; font-weight: 600;
-  letter-spacing: 0.04em; text-transform: uppercase;
-  background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.35);
-  padding: 4px 10px; border-radius: 999px;
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: nowrap;
+  font-family: var(--font-brand); font-size: 13px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  background: #FF9500; color: #2B1700;
+  padding: 5px 14px; border-radius: 999px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
 /* ---------- Stage ---------- */
