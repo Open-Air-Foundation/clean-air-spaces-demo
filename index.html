@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cabin:wght@500;600;700&family=Catamaran:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-<link rel="stylesheet" href="styles.css?v=13">
+<link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
 
@@ -68,6 +68,40 @@
         </div>
 
         <div class="legend" id="legend" hidden></div>
+
+        <!-- Simulated indoor measurement with an AirGradient Go (follows the iOS flow) -->
+        <section class="measure" id="measure" aria-label="Indoor measurement" hidden>
+          <header class="m-nav">
+            <button type="button" class="m-nav-btn" id="mLeft">Cancel</button>
+            <h2 id="mTitle">Indoor measurement</h2>
+            <span class="m-nav-btn" aria-hidden="true"></span>
+          </header>
+          <div class="m-steps" id="mSteps" aria-hidden="true"><i></i><i></i><i></i></div>
+          <div class="m-status" id="mStatus" hidden>
+            <div class="m-status-row">
+              <div class="m-status-mascot" id="mStatusMascot" aria-hidden="true"></div>
+              <div class="m-status-text"><span class="m-status-place" id="mStatusPlace"></span><strong id="mStatusTitle" aria-live="polite"></strong></div>
+              <span class="m-status-trailing" id="mStatusTrailing"></span>
+            </div>
+            <div class="m-progress" id="mProgress"><i></i></div>
+            <div class="m-metrics" id="mMetrics"><span id="mPm"></span><span id="mCo2"></span></div>
+            <div class="m-segments" id="mSegments"></div>
+            <div class="m-status-hint" id="mStatusHint">Place Go down and leave it still while answering on your phone.</div>
+          </div>
+          <div class="m-body" id="mBody"></div>
+          <footer class="m-footer" id="mFooter"></footer>
+          <div class="m-confirm" id="mConfirm" hidden>
+            <div class="m-confirm-card" role="alertdialog" aria-labelledby="mConfirmTitle">
+              <strong id="mConfirmTitle">Cancel measurement?</strong>
+              <p>Leaving will discard this unfinished measurement.</p>
+              <button type="button" class="m-btn danger" data-confirm="discard">Cancel measurement</button>
+              <button type="button" class="m-btn secondary" data-confirm="stay">Continue</button>
+            </div>
+          </div>
+        </section>
+        <section class="m-done" id="mDone" aria-label="Measurement submitted" hidden></section>
+        <input type="file" id="mPhotoInput" accept="image/*" capture="environment" hidden>
+
         <div class="toast" id="toast" role="status" hidden></div>
       </div>
     </div>
@@ -106,6 +140,14 @@
       <p class="hint">You can also drag the blue dot on the map. Distances and "Cleanest near you" follow your location.</p>
     </section>
 
+    <section class="ctl">
+      <label class="ctl-check" for="fastToggle">
+        <input type="checkbox" id="fastToggle">
+        <span><span class="ctl-label">Fast measurement</span>
+        <span class="hint">Runs a simulated Go measurement in about 10 seconds instead of 45. Open a place and tap Measure.</span></span>
+      </label>
+    </section>
+
     <details class="about">
       <summary>How the estimates work</summary>
       <p>Each place has 1–5 simulated measurements, each pairing an indoor reading with an outdoor reading taken nearby at the same time, as in the AirGradient Go measurement flow.</p>
@@ -126,6 +168,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie_light.min.js"></script>
 <script src="data/places.js"></script>
 <script src="data/mascots.js"></script>
-<script src="app.js?v=13"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>

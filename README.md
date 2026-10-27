@@ -20,6 +20,12 @@ Live version: https://open-air-foundation.github.io/clean-air-spaces-demo/
 
 The switch in the blue bar toggles between **Phone** (the app in a phone frame, simulation controls beside it) and **Desktop** (sidebar with search, filters and list or place details, full-width map, simulation controls as a floating card you can hide). Add `#desktop` or `#phone` to the link to open a layout directly. On screens narrower than 880 px the app always fills the screen in the phone layout.
 
+## Simulated measurement
+
+Open a place and tap **Measure** to run a simulated AirGradient Go indoor measurement, following the iOS flow without the outdoor, calibration and place-type steps: prepare, six questions while Go settles (15 s) and collects 10 readings (every 3 s), review, submit, and the success screen with level and badges. Readings follow the place's current indoor estimate, so the outdoor slider affects them. "Fast measurement" in the simulation panel runs it in about 10 seconds.
+
+Submissions, points and badges are kept in the viewer's browser only. Submitted measurements show on the place as "Awaiting review" and don't change the estimate.
+
 ## What's in it
 
 - `index.html`, `styles.css`, `app.js`: the page, styles and logic

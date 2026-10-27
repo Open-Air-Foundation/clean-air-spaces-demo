@@ -230,6 +230,8 @@
       co2: ms.length ? median(ms.map((m) => m.co2)) : null,
       cleanAir,
       purifierSeen: ms.filter((m) => m.purifier).length,
+      prof,
+      pending: [],
       cur: null,
     };
   }
@@ -731,6 +733,17 @@
       `<a href="https://openair.foundation/" target="_blank" rel="noopener">Learn more at openair.foundation ›</a></div></div>`;
   }
 
+  // Published measurements, with the viewer's own submissions on top while they await review.
+  function measurementTable(p) {
+    const row = (m, pending) => `<tr${pending ? ' class="pending"' : ''}><td>${fmtDate(m.date)}` +
+      (pending ? '<span class="review-chip">Awaiting review</span>' : '') + '</td>' +
+      `<td><span class="dot" style="background:${pmBand(m.inside).color}"></span>${m.inside}</td>` +
+      `<td><span class="dot" style="background:${pmBand(m.out).color}"></span>${m.out}</td><td>${m.co2}</td></tr>`;
+    return `<table class="mtable"><thead><tr><th>Date</th><th>Inside</th><th>Outside</th><th>CO₂</th></tr></thead><tbody>` +
+      p.pending.map((m) => row(m, true)).join('') + p.ms.map((m) => row(m, false)).join('') +
+      `<tr class="unit"><td></td><td>µg/m³</td><td>µg/m³</td><td>ppm</td></tr></tbody></table>`;
+  }
+
   function renderPlace() {
     const p = byId.get(state.selected);
     const body = $('sheetBody');
@@ -747,8 +760,12 @@
       html +=
         `<div class="compare">${cmpTile('Inside', '–', '', { color: '#E9ECEF', label: 'Not measured yet' })}` +
         `${cmpTile('Outside here', Math.round(p.cur.out), 'µg/m³', outBand)}</div>` +
-        `<div class="unmeasured"><div class="verdict-mascot" id="placeMascot"></div><div><strong>Be the first to measure</strong>` +
-        `<p>Nobody has measured the air here yet. Take an AirGradient Go inside and help others find clean air.</p></div></div>`;
+        (p.pending.length
+          ? `<div class="unmeasured"><div class="verdict-mascot" id="placeMascot"></div><div><strong>Thanks for measuring</strong>` +
+            `<p>Your measurement is awaiting review. It shows on the map once our team has checked it.</p></div></div>` +
+            `<div class="section-title">Measurements</div>${measurementTable(p)}`
+          : `<div class="unmeasured"><div class="verdict-mascot" id="placeMascot"></div><div><strong>Be the first to measure</strong>` +
+            `<p>Nobody has measured the air here yet. Take an AirGradient Go inside and help others find clean air.</p></div></div>`);
     } else {
       const inBand = pmBand(p.cur.est);
       const v = p.cur.verdict;
@@ -776,12 +793,7 @@
         `<div class="fact"><span class="fact-dot" style="background:${p.purifierSeen ? 'var(--reward)' : 'var(--neutral)'}"></span><span>Air purifier seen in ${p.purifierSeen} of ${p.ms.length} measurement${p.ms.length > 1 ? 's' : ''}</span></div>` +
         `</div>` +
         (p.cleanAir ? systemHTML() : '') +
-        `<div class="section-title">Measurements</div>` +
-        `<table class="mtable"><thead><tr><th>Date</th><th>Inside</th><th>Outside</th><th>CO₂</th></tr></thead><tbody>` +
-        p.ms.map((m) => `<tr><td>${fmtDate(m.date)}</td>` +
-          `<td><span class="dot" style="background:${pmBand(m.inside).color}"></span>${m.inside}</td>` +
-          `<td><span class="dot" style="background:${pmBand(m.out).color}"></span>${m.out}</td><td>${m.co2}</td></tr>`).join('') +
-        `<tr class="unit"><td></td><td>µg/m³</td><td>µg/m³</td><td>ppm</td></tr></tbody></table>`;
+        `<div class="section-title">Measurements</div>${measurementTable(p)}`;
     }
     html +=
       `<div class="actions">` +
@@ -1035,7 +1047,7 @@
         toast(state.saved.has(p.id) ? `Saved ${p.name}. You'll be told when its air changes.` : `Removed ${p.name} from saved places.`);
         break;
       case 'measure':
-        if (p) toast(`In the AirGradient app, this starts a new measurement of ${p.name} with your AirGradient Go.`);
+        if (p) startFlow(p.id);
         break;
       case 'copy-code': {
         const copied = () => toast(`Code ${DISCOUNT_CODE} copied. Show it at the counter for 10% off your coffee.`);
@@ -1134,6 +1146,524 @@
   document.querySelectorAll('.view-toggle button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === (hashView || savedView || 'phone'))));
   map.resize();
   new ResizeObserver(() => map.resize()).observe($('map'));
+
+  // ---------------------------------------------------------------------------
+  // Simulated indoor measurement with an AirGradient Go
+  // Follows the iOS Spot flow (prepare → questions while Go measures → review → submitted),
+  // without the outdoor, calibration and place-type steps.
+  // ---------------------------------------------------------------------------
+
+  const SETTLE_S = 15;
+  const INTERVAL_S = 3;
+  const SAMPLE_TARGET = 10;
+  const FAST = { settle: 3, interval: 0.7 };
+  const LEVEL_THRESHOLDS = [0, 20, 60, 150, 300];
+  const QUESTION_KEYS = ['area', 'occupancy', 'doors', 'purifier', 'activities', 'photo'];
+  const FALLBACK_ANSWERS = ['other', 'unknown', 'none_noticed'];
+
+  const QUESTION_TITLE = {
+    area: 'Which part of the place are you measuring in?',
+    occupancy: 'How occupied is the room or area you are measuring?',
+    doors: 'During this measurement, were nearby doors or windows to outdoors open?',
+    purifier: 'Did you notice a portable air cleaner in this area?',
+    activities: 'Nearby activities',
+    photo: 'Add a photo of this space',
+  };
+  const DETAIL_LABEL = {
+    area: 'Area type', occupancy: 'Occupancy', doors: 'Doors and windows',
+    purifier: 'Portable air cleaner', activities: 'Nearby activities', photo: 'Photo',
+  };
+  const ANSWER_LABEL = {
+    seating: 'Main seating area', separate_room: 'Separate room', counter: 'Counter / ordering area',
+    covered_outdoor: 'Covered outdoor seating', concourse: 'Main concourse / atrium', food_court: 'Food court',
+    shop: 'Inside a shop', corridor: 'Corridor', indoor_car_park: 'Indoor car park', lobby: 'Lobby',
+    guest_room: 'Guest room', dining_area: 'Restaurant / dining area', meeting_room: 'Meeting room',
+    waiting_area: 'Waiting area', treatment_room: 'Consultation / treatment room', ward: 'Ward',
+    cafeteria: 'Cafeteria', main_area: 'Main occupied area', other: 'Other', unknown: 'Not sure',
+    only_me: 'Only me', mostly_empty: 'Mostly empty', half_full: 'Around half full', mostly_full: 'Mostly full',
+    open_continuously: 'Open continuously', open_frequently: 'Opening and closing frequently',
+    closed_throughout: 'Closed throughout', no_outside_openings: 'No outside doors/windows nearby',
+    purifier_running: 'Apparently running', purifier_off: 'Appears off', purifier_unsure: 'Unsure whether running',
+    none_noticed: 'None noticed', source_cooking: 'Cooking', source_smoking: 'Smoking or vaping',
+    source_candles: 'Candles, incense or other burning', source_dust: 'Construction or other dust-producing work',
+    source_exhaust: 'Running vehicles / exhaust',
+  };
+  const people = (n) => Array.from({ length: n }, (_, i) => {
+    const x = 12 + (i - (n - 1) / 2) * 6;
+    return `M${x} ${n > 2 ? 10.5 : 9.5}m-2.3 0a2.3 2.3 0 1 0 4.6 0a2.3 2.3 0 1 0-4.6 0M${x - 3.6} 19a3.6 3.6 0 0 1 7.2 0`;
+  }).join('');
+  const ANSWER_GLYPH = {
+    seating: 'M7 4v9h10M7 13v7M17 13v7M7 9h10', separate_room: 'M6 21V4h12v17M3 21h18M14 12.5h.01',
+    counter: 'M4 11h16v9H4zM7 11V5h10v6M9 8h6', covered_outdoor: 'M3 12a9 9 0 0 1 18 0ZM12 12v6a2 2 0 0 1-4 0',
+    concourse: 'M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6', food_court: 'M7 3v18M4.5 3v5a2.5 2.5 0 0 0 5 0V3M17 21V3c-2.2 1.2-3.5 4-3.5 8H17',
+    shop: 'M5.5 8h13l-1 12.5h-11L5.5 8ZM9 8V6.5a3 3 0 0 1 6 0V8', lobby: 'M3 21h18M5 21V8l7-4 7 4v13M10 21v-5h4v5',
+    waiting_area: 'M5 11v8M19 11v8M5 15h14M8 11V7h8v4', main_area: 'M4 4h16v16H4zM4 12h16M12 4v16',
+    only_me: people(1), mostly_empty: people(2), half_full: people(3), mostly_full: 'M4 9.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0M10 9.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0M16 9.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0M3 19a3 3 0 0 1 6 0M9 19a3 3 0 0 1 6 0M15 19a3 3 0 0 1 6 0',
+    open_continuously: 'M4 21V4h9v17M13 4l6 2v13l-6 2M3 21h18', open_frequently: 'M4 21V4h9v17M13 4l6 2v13l-6 2M16 10l2 2-2 2',
+    closed_throughout: 'M6 21V4h12v17M3 21h18M14 12.5h.01', no_outside_openings: 'M4 4h16v16H4zM8 8l8 8M16 8l-8 8',
+    purifier_running: 'M7 3h10v18H7zM10 8h4M10 12h4M10 16h4M20 8c1 1.3 1 2.7 0 4M2.5 8c-1 1.3-1 2.7 0 4',
+    purifier_off: 'M7 3h10v18H7zM10 8h4M10 12h4M10 16h4', purifier_unsure: 'M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17.5v.5',
+    source_cooking: 'M3 11h13a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4ZM16 11h5M8 7.5c0-1 1-1 1-2.5M12 7.5c0-1 1-1 1-2.5',
+    source_smoking: 'M3 15h14v3H3zM19.5 15v3M17 11c0-2 2-2 2-4M21 11c0-2-1-3-1-4',
+    source_candles: 'M9 21V11h6v10M12 11V8.5M12 3.5c1.2 1.6 1.4 2.8 0 4.2c-1.4-1.4-1.2-2.6 0-4.2',
+    source_dust: 'M3 20h18M6 20l3-9h6l3 9M9 11l1-4h4l1 4', source_exhaust: 'M5 16h14l-1.5-5h-11L5 16ZM5 16v3M19 16v3M2 11h2',
+    other: 'M5 12h.01M12 12h.01M19 12h.01',
+  };
+
+  function spaceTypeOf(p) {
+    const byKind = {
+      cafe: 'cafe', bakery: 'cafe', ice_cream: 'cafe', restaurant: 'restaurant', fast_food: 'restaurant', food_court: 'restaurant',
+      bar: 'bar', pub: 'bar', mall: 'mall', department_store: 'mall', supermarket: 'supermarket', convenience: 'shop', books: 'shop',
+      museum: 'museum', gallery: 'museum', arts_centre: 'museum', theatre: 'theatre', cinema: 'cinema', library: 'library',
+      hotel: 'hotel', hospital: 'hospital', clinic: 'clinic', fitness_centre: 'gym', sports_centre: 'sportsCentre',
+      coworking_space: 'coworking', coworking: 'coworking',
+    };
+    return byKind[p.kind] || 'other';
+  }
+  // Same area options per space type as SpotQuestions.areas in the apps.
+  function areaOptions(type) {
+    const main = {
+      mall: ['concourse', 'food_court', 'shop', 'corridor', 'indoor_car_park'],
+      cafe: ['seating', 'separate_room', 'counter', 'covered_outdoor'],
+      restaurant: ['seating', 'separate_room', 'counter', 'covered_outdoor'],
+      bar: ['seating', 'separate_room', 'counter', 'covered_outdoor'],
+      hotel: ['lobby', 'guest_room', 'dining_area', 'corridor', 'meeting_room'],
+      hospital: ['waiting_area', 'treatment_room', 'ward', 'corridor', 'cafeteria'],
+      clinic: ['waiting_area', 'treatment_room', 'ward', 'corridor', 'cafeteria'],
+    }[type] || ['main_area', 'separate_room', 'lobby', 'corridor'];
+    return [...main, 'other', 'unknown'];
+  }
+  function answerOptions(key) {
+    switch (key) {
+      case 'area': return areaOptions(flow.type);
+      case 'occupancy': return ['only_me', 'mostly_empty', 'half_full', 'mostly_full', 'unknown'];
+      case 'doors': return ['open_continuously', 'open_frequently', 'closed_throughout', 'no_outside_openings', 'unknown'];
+      case 'purifier': return ['purifier_running', 'purifier_off', 'purifier_unsure', 'none_noticed', 'unknown'];
+      case 'activities': return ['source_cooking', 'source_smoking', 'source_candles', 'source_dust', 'source_exhaust', 'other', 'none_noticed', 'unknown'];
+      default: return [];
+    }
+  }
+
+  const flow = { open: false };
+  let flowTimer = null;
+
+  const svgIcon = (d, cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
+  const flowPlace = () => byId.get(flow.placeId);
+  const flowSpeed = () => ($('fastToggle').checked ? FAST : { settle: SETTLE_S, interval: INTERVAL_S });
+  const meanOf = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  const tintFill = (color) => `color-mix(in srgb, ${color} 24%, #fff)`;
+
+  function startFlow(id) {
+    if (flow.photo) URL.revokeObjectURL(flow.photo);
+    Object.assign(flow, {
+      open: true, placeId: id, type: spaceTypeOf(byId.get(id)), step: 'prepare', phase: 'idle',
+      samples: [], q: 0, answers: { activities: [] }, photo: null, questionsDone: false,
+      anonymous: false, error: '', submitting: false,
+    });
+    $('legend').hidden = true;
+    $('mDone').hidden = true;
+    $('measure').hidden = false;
+    renderFlow();
+  }
+
+  function closeFlow() {
+    clearInterval(flowTimer);
+    flowTimer = null;
+    flow.open = false;
+    if (flow.photo) { URL.revokeObjectURL(flow.photo); flow.photo = null; }
+    $('measure').hidden = true;
+    $('mConfirm').hidden = true;
+    $('mDone').hidden = true;
+  }
+
+  function startCapture() {
+    const speed = flowSpeed();
+    flow.step = 'measure';
+    flow.phase = 'settling';
+    flow.settleStart = Date.now();
+    flow.settleEnd = flow.settleStart + speed.settle * 1000;
+    clearInterval(flowTimer);
+    flowTimer = setInterval(tickFlow, 200);
+    renderFlow();
+  }
+
+  // A reading near the place's indoor level right now, so the outdoor slider also moves the readings.
+  function simulatedReading(p) {
+    const out = state.pm * p.m;
+    const base = p.sealed ? p.indoor
+      : p.ratio != null ? out * p.ratio
+        : out * p.prof.ratio + p.prof.source * 0.6;
+    return {
+      pm: Math.max(0.3, Math.round(base * (0.9 + Math.random() * 0.2) * 10) / 10),
+      co2: Math.round((p.co2 ?? p.prof.co2) * (0.97 + Math.random() * 0.06)),
+    };
+  }
+
+  function tickFlow() {
+    const now = Date.now();
+    if (flow.phase === 'settling' && now >= flow.settleEnd) {
+      flow.phase = 'collecting';
+      flow.nextSample = now;
+    }
+    if (flow.phase === 'collecting' && now >= flow.nextSample) {
+      flow.samples.push(simulatedReading(flowPlace()));
+      flow.nextSample = now + flowSpeed().interval * 1000;
+      if (flow.samples.length >= SAMPLE_TARGET) {
+        flow.phase = 'complete';
+        clearInterval(flowTimer);
+        flowTimer = null;
+        if (flow.questionsDone) { goToReview(); return; }
+      }
+    }
+    renderStatus();
+  }
+
+  function goToReview() {
+    flow.step = 'review';
+    renderFlow();
+  }
+
+  function captureMeans() {
+    return {
+      pm: Math.round(meanOf(flow.samples.map((s) => s.pm)) * 10) / 10,
+      co2: Math.round(meanOf(flow.samples.map((s) => s.co2))),
+    };
+  }
+
+  function renderStatus() {
+    const box = $('mStatus');
+    box.hidden = flow.step !== 'measure';
+    if (box.hidden) return;
+    const p = flowPlace();
+    const n = flow.samples.length;
+    const complete = flow.phase === 'complete';
+    const settling = flow.phase === 'settling';
+    const latest = complete ? captureMeans() : flow.samples[n - 1];
+    $('mStatusPlace').textContent = p.name;
+    $('mStatusTitle').textContent = complete ? 'Measurement complete' : settling ? 'Settling period' : 'Measuring…';
+    const trailing = $('mStatusTrailing');
+    if (settling) {
+      const left = Math.max(0, Math.ceil((flow.settleEnd - Date.now()) / 1000));
+      trailing.textContent = `0:${String(left).padStart(2, '0')}`;
+    } else if (complete) {
+      trailing.innerHTML = '<span class="m-check" aria-label="Complete">✓</span>';
+    } else {
+      trailing.textContent = `${n} / ${SAMPLE_TARGET}`;
+    }
+    $('mProgress').hidden = !settling;
+    if (settling) {
+      const done = (Date.now() - flow.settleStart) / (flow.settleEnd - flow.settleStart);
+      $('mProgress').firstElementChild.style.width = `${Math.min(100, done * 100)}%`;
+    }
+    $('mStatusHint').hidden = !settling;
+    $('mMetrics').hidden = settling;
+    $('mSegments').hidden = settling;
+    if (!settling && latest) {
+      $('mPm').textContent = `${complete ? 'Average ' : ''}PM2.5 ${latest.pm.toFixed(1)} µg/m³`;
+      $('mCo2').textContent = `CO₂ ${latest.co2} ppm`;
+    } else if (!settling) {
+      $('mPm').textContent = 'PM2.5 — µg/m³';
+      $('mCo2').textContent = 'CO₂ — ppm';
+    }
+    $('mSegments').innerHTML = Array.from({ length: SAMPLE_TARGET }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('');
+    const band = latest && !settling ? pmBand(latest.pm) : null;
+    box.style.setProperty('--tint', band ? tintFill(band.color) : '#EEF2F6');
+    box.style.setProperty('--seg', band ? band.color : 'var(--brand)');
+    mountMascot($('mStatusMascot'), 'mascot_reading');
+  }
+
+  function prepareHTML(p) {
+    const icon = (GROUPS.find((g) => g.id === p.group) || {}).icon;
+    return `<div class="m-place-card">${icon ? svgIcon(icon, 'm-place-icon') : ''}` +
+      `<div class="m-place-text"><strong>${esc(p.name)}</strong><span>${esc(KIND_LABEL[p.kind] || 'Place')}</span></div>` +
+      `<div class="m-mascot-64" id="mPrepMascot"></div></div>` +
+      `<h3 class="m-title">Ready to measure</h3>` +
+      `<div class="m-bubble">Place Go where you want to check the air.</div>` +
+      `<ul class="m-instructions">` +
+      `<li>${svgIcon('M8.5 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM10 7h4M10 10h4')}<span>Keep Go still with its air openings clear.</span></li>` +
+      `<li>${svgIcon('M3 8h11a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h7')}<span>Keep it away from your breath, vents, and other direct sources of airflow.</span></li>` +
+      `<li>${svgIcon('M12 8v4l3 2M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM9.5 2.5h5')}<span>Go will settle for ${SETTLE_S} seconds, then collect ${SAMPLE_TARGET} readings.</span></li>` +
+      `</ul>` +
+      `<p class="m-note">You can answer questions about the space and take a photo while Go measures.</p>` +
+      `<p class="m-footnote">Keep the app open until measurement finishes.</p>`;
+  }
+
+  function choiceHTML(key, option, layout) {
+    const selected = key === 'activities' ? flow.answers.activities.includes(option) : flow.answers[key] === option;
+    const glyph = ANSWER_GLYPH[option];
+    return `<button type="button" class="m-choice ${layout}" data-answer="${option}" aria-pressed="${selected}">` +
+      (layout === 'tile' && glyph ? svgIcon(glyph, 'm-choice-icon') : '') +
+      `<span>${esc(ANSWER_LABEL[option] || option)}</span><span class="m-choice-check" aria-hidden="true">✓</span></button>`;
+  }
+
+  function questionHTML() {
+    const key = QUESTION_KEYS[flow.q];
+    let html = `<div class="m-qprog">Question ${flow.q + 1} of ${QUESTION_KEYS.length}</div>` +
+      `<div class="m-qhead"><h3>${esc(QUESTION_TITLE[key])}</h3>${key === 'photo' ? '' : '<div class="m-mascot-58" id="mQMascot"></div>'}</div>`;
+    if (key === 'photo') {
+      html += flow.photo
+        ? `<img class="m-photo" src="${flow.photo}" alt="Your photo of the space">`
+        : `<div class="m-photo-empty">${svgIcon('M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z')}<p>Help others recognize where you measured. Avoid identifiable people.</p></div>`;
+      return html;
+    }
+    const options = answerOptions(key);
+    const main = options.filter((o) => !FALLBACK_ANSWERS.includes(o) || (key === 'activities' && o === 'other'));
+    const useGrid = key === 'activities' || (main.length <= 4 && main.every((o) => ANSWER_GLYPH[o]));
+    if (key === 'activities') html += '<p class="m-sub">Select any you noticed. Leave blank if not reported.</p>';
+    if (useGrid) html += `<div class="m-grid">${main.map((o) => choiceHTML(key, o, 'tile')).join('')}</div>`;
+    const rows = useGrid ? options.filter((o) => !main.includes(o)) : options;
+    html += `<div class="m-rows">${rows.map((o) => choiceHTML(key, o, 'row')).join('')}</div>`;
+    return html;
+  }
+
+  function detailsDoneHTML() {
+    return `<div class="m-details-done"><div class="m-mascot-130" id="mDetailsMascot"></div>` +
+      `<h3>Space details complete</h3>` +
+      `<div class="m-bubble center">Keep Go still. Each new reading advances the counter.</div>` +
+      `<ul class="m-checklist">${QUESTION_KEYS.map((k, i) => `<li style="--i:${i}"><span class="m-check">✓</span>${DETAIL_LABEL[k]}</li>`).join('')}</ul></div>`;
+  }
+
+  function rewardsFor(list) {
+    const points = list.length;
+    let level = 1;
+    LEVEL_THRESHOLDS.forEach((t, i) => { if (points >= t) level = i + 1; });
+    const next = LEVEL_THRESHOLDS[level];
+    const floor = LEVEL_THRESHOLDS[level - 1];
+    const types = new Set(list.map((s) => s.type).filter((t) => t !== 'other'));
+    const badges = [];
+    if (list.length) badges.push('first');
+    if (list.filter((s) => s.type === 'cafe').length >= 3) badges.push('cafe');
+    if (types.size >= 5) badges.push('explorer');
+    if (list.some((s) => s.co2 < 600 && comparison(s.inside, s.out) === 'cleaner')) badges.push('fresh_air');
+    return { points, level, next, progress: next ? (points - floor) / (next - floor) : 1, badges };
+  }
+  const BADGES = {
+    first: ['First measurement', 'Submitted your first public space measurement'],
+    cafe: ['Café critic', 'Measured 3 coffee shops'],
+    explorer: ['Explorer', 'Measured 5 different types of places'],
+    fresh_air: ['Fresh-air finder', 'Found a place with fresh air that is cleaner than outside'],
+  };
+
+  function loadSubmissions() {
+    try { return JSON.parse(localStorage.getItem('cas-submissions') || '[]'); } catch (e) { return []; }
+  }
+  function saveSubmissions(list) {
+    try { localStorage.setItem('cas-submissions', JSON.stringify(list)); } catch (e) { /* storage unavailable */ }
+  }
+  let profileName = '';
+  try { profileName = localStorage.getItem('cas-profile-name') || ''; } catch (e) { /* storage unavailable */ }
+
+  function reviewHTML() {
+    const p = flowPlace();
+    const means = captureMeans();
+    const band = pmBand(means.pm);
+    const cb = co2Band(means.co2);
+    const out = Math.round(state.pm * p.m);
+    const verdict = comparison(means.pm, out);
+    const verdictText = { cleaner: 'Cleaner than outside', same: 'About the same as outside', worse: 'More particles than outside' }[verdict];
+    const summary = [KIND_LABEL[p.kind], ANSWER_LABEL[flow.answers.area], ANSWER_LABEL[flow.answers.occupancy]]
+      .filter((s) => s && s !== 'Not sure').map(esc).join(' · ');
+    const maxV = Math.max(means.pm, out, 1);
+    const rewards = rewardsFor(loadSubmissions());
+    return `<div class="m-result-head" style="background:${tintFill(band.color)}"><div class="m-mascot-88" id="mReviewMascot"></div>` +
+      `<div><strong>${esc(p.name)}</strong>${summary ? `<span>${summary}</span>` : ''}` +
+      `<em class="m-chip" style="background:${band.color};color:${textOn(band.color)}">${esc(band.label)}</em></div></div>` +
+      `<div class="m-tiles">` +
+      `<div class="m-tile-metric" style="background:${tintFill(band.color)}"><span>PM2.5</span><b>${means.pm.toFixed(1)} <small>µg/m³</small></b><em>${esc(band.label)}</em></div>` +
+      `<div class="m-tile-metric" style="background:${tintFill(cb.color)}"><span>CO₂</span><b>${means.co2} <small>ppm</small></b><em>${esc(cb.label)}</em></div>` +
+      `</div>` +
+      `<div class="m-compare"><strong>Inside compared with outside</strong>` +
+      `<div class="m-bar"><span>Inside</span><i><b style="width:${(means.pm / maxV) * 100}%;background:${band.color}"></b></i><em>${means.pm.toFixed(1)}</em></div>` +
+      `<div class="m-bar"><span>Outside</span><i><b style="width:${(out / maxV) * 100}%;background:#9AA3AD"></b></i><em>${out}</em></div>` +
+      `<p class="m-verdict ${verdict}">${verdictText}</p>` +
+      `<p class="m-footnote">Outside value from nearby outdoor monitors.</p></div>` +
+      `<div class="m-submit">` +
+      (flow.anonymous ? '' : `<label class="m-field"><span>Public profile name</span><input id="mName" type="text" autocomplete="nickname" placeholder="Public profile name" value="${esc(profileName)}"></label>`) +
+      `<div class="m-points"><span>Points: ${rewards.points}</span><em class="m-chip reward">Level ${rewards.level}</em></div>` +
+      `<label class="m-toggle"><input type="checkbox" id="mAnon" ${flow.anonymous ? 'checked' : ''}><span class="m-switch" aria-hidden="true"><i></i></span>` +
+      `<span>Hide my public profile name for this measurement</span></label>` +
+      `<p class="m-footnote">Your submission will display your public profile name and can earn you points. Check this box to hide your name from the public. The submission will remain linked to your AirGradient account.</p>` +
+      (flow.error ? `<p class="m-error">${esc(flow.error)}</p>` : '') +
+      `</div>`;
+  }
+
+  function renderFlow() {
+    if (!flow.open) return;
+    const p = flowPlace();
+    const stepIndex = { prepare: 0, measure: 1, review: 2 }[flow.step];
+    $('mTitle').textContent = flow.step === 'review' ? 'Review measurement' : 'Indoor measurement';
+    $('mLeft').textContent = flow.step === 'review' ? 'Back' : 'Cancel';
+    [...$('mSteps').children].forEach((el, i) => { el.className = i < stepIndex ? 'done' : i === stepIndex ? 'current' : ''; });
+    renderStatus();
+
+    const body = $('mBody');
+    const footer = $('mFooter');
+    let html = '';
+    let foot = '';
+    if (flow.step === 'prepare') {
+      html = prepareHTML(p);
+      foot = '<button type="button" class="m-btn primary" data-flow="start">Start measurement</button>';
+    } else if (flow.step === 'measure' && !flow.questionsDone) {
+      html = questionHTML();
+      const isPhoto = QUESTION_KEYS[flow.q] === 'photo';
+      foot = isPhoto && !flow.photo
+        ? '<button type="button" class="m-btn primary" data-flow="photo">Take photo</button><button type="button" class="m-btn secondary" data-flow="next">Continue without photo</button>'
+        : isPhoto
+          ? '<button type="button" class="m-btn primary" data-flow="next">Continue</button><button type="button" class="m-btn secondary" data-flow="photo">Retake photo</button>'
+          : '<button type="button" class="m-btn primary" data-flow="next">Continue</button>';
+    } else if (flow.step === 'measure') {
+      html = detailsDoneHTML();
+    } else {
+      html = reviewHTML();
+      foot = `<button type="button" class="m-btn primary" data-flow="submit" ${flow.submitting ? 'disabled' : ''}>${flow.submitting ? 'Submitting…' : 'Submit for review'}</button>`;
+    }
+    body.innerHTML = html;
+    footer.innerHTML = foot;
+    footer.hidden = !foot;
+    body.scrollTop = 0;
+    mountMascot($('mPrepMascot'), 'mascot_reading');
+    mountMascot($('mQMascot'), QUESTION_KEYS[flow.q] === 'doors' ? 'mascot_stay_indoors' : 'mascot_idea');
+    mountMascot($('mDetailsMascot'), 'mascot_reading');
+    if (flow.step === 'review') mountMascot($('mReviewMascot'), pmBand(captureMeans().pm).mascot);
+  }
+
+  function selectAnswer(option) {
+    const key = QUESTION_KEYS[flow.q];
+    if (key === 'activities') {
+      const cur = flow.answers.activities;
+      // Same rule as SpotQuestions.toggleActivity: "none noticed" and "not sure" exclude the others.
+      flow.answers.activities = cur.includes(option) ? cur.filter((o) => o !== option)
+        : ['none_noticed', 'unknown'].includes(option) ? [option]
+          : [...cur.filter((o) => !['none_noticed', 'unknown'].includes(o)), option];
+    } else {
+      flow.answers[key] = option;
+    }
+    const keep = $('mBody').scrollTop;
+    renderFlow();
+    $('mBody').scrollTop = keep;
+  }
+
+  function nextQuestion() {
+    if (flow.q < QUESTION_KEYS.length - 1) { flow.q += 1; renderFlow(); return; }
+    flow.questionsDone = true;
+    if (flow.phase === 'complete') goToReview(); else renderFlow();
+  }
+
+  function submitFlow() {
+    const nameInput = $('mName');
+    if (nameInput) profileName = nameInput.value.trim();
+    if (!flow.anonymous && !profileName) {
+      flow.error = 'Choose a public profile name.';
+      renderFlow();
+      return;
+    }
+    try { localStorage.setItem('cas-profile-name', profileName); } catch (e) { /* storage unavailable */ }
+    flow.error = '';
+    flow.submitting = true;
+    renderFlow();
+    setTimeout(() => {
+      const p = flowPlace();
+      const means = captureMeans();
+      const list = loadSubmissions();
+      const before = rewardsFor(list);
+      const record = {
+        placeId: p.id, type: flow.type, date: new Date().toISOString(),
+        inside: Math.max(1, Math.round(means.pm)), out: Math.round(state.pm * p.m), co2: means.co2,
+      };
+      list.push(record);
+      saveSubmissions(list);
+      p.pending.unshift({ date: new Date(record.date), inside: record.inside, out: record.out, co2: record.co2 });
+      flow.submitting = false;
+      showSubmitted(p, before, rewardsFor(list));
+    }, 900);
+  }
+
+  function showSubmitted(p, before, after) {
+    clearInterval(flowTimer);
+    $('measure').hidden = true;
+    const unlocked = after.badges.filter((b) => !before.badges.includes(b));
+    const colors = ['#58D32F', '#FFDA3E', '#FF9300', '#FFFFFF', '#B0ECFF', '#E39A00'];
+    const confetti = reducedMotion ? '' : Array.from({ length: 36 }, (_, i) =>
+      `<i style="left:${(i * 37) % 100}%;background:${colors[i % colors.length]};animation-delay:${(i % 9) * 0.12}s;--drift:${((i * 53) % 60) - 30}px"></i>`).join('');
+    const done = $('mDone');
+    done.innerHTML =
+      `<div class="m-confetti" aria-hidden="true">${confetti}</div>` +
+      `<div class="m-done-inner">` +
+      `<div class="m-mascot-170" id="mDoneMascot"></div>` +
+      `<h2>Measurement submitted</h2>` +
+      `<p>Thanks for measuring ${esc(p.name)}. Our team reviews it before it appears on the map.</p>` +
+      `<div class="m-level"><div><strong>Level ${after.level}</strong><span>${after.next ? `${after.points} / ${after.next} points` : `${after.points} points`}</span></div>` +
+      `<i><b style="width:${Math.max(4, after.progress * 100)}%"></b></i></div>` +
+      unlocked.map((b) => `<div class="m-badge"><span class="m-badge-icon">${svgIcon(STAR_PATH)}</span><div><strong>Badge unlocked: ${BADGES[b][0]}</strong><span>${BADGES[b][1]}</span></div></div>`).join('') +
+      `<button type="button" class="m-btn white" data-done="another">Measure another place</button>` +
+      `<button type="button" class="m-btn ghost" data-done="done">Done</button>` +
+      `</div>`;
+    done.hidden = false;
+    mountMascot($('mDoneMascot'), 'mascot_mission');
+  }
+
+  // Saved submissions from earlier visits show as "Awaiting review" on their places.
+  loadSubmissions().forEach((s) => {
+    const p = byId.get(s.placeId);
+    if (p) p.pending.unshift({ date: new Date(s.date), inside: s.inside, out: s.out, co2: s.co2 });
+  });
+
+  $('measure').addEventListener('click', (e) => {
+    const choice = e.target.closest('[data-answer]');
+    if (choice) { selectAnswer(choice.dataset.answer); return; }
+    const action = e.target.closest('[data-flow]');
+    if (action) {
+      switch (action.dataset.flow) {
+        case 'start': startCapture(); break;
+        case 'next': nextQuestion(); break;
+        case 'photo': $('mPhotoInput').click(); break;
+        case 'submit': submitFlow(); break;
+        default: break;
+      }
+      return;
+    }
+    const confirm = e.target.closest('[data-confirm]');
+    if (confirm) {
+      $('mConfirm').hidden = true;
+      if (confirm.dataset.confirm === 'discard') closeFlow();
+    }
+  });
+  $('measure').addEventListener('change', (e) => {
+    if (e.target.id === 'mAnon') {
+      const nameInput = $('mName');
+      if (nameInput) profileName = nameInput.value.trim();
+      flow.anonymous = e.target.checked;
+      flow.error = '';
+      renderFlow();
+    }
+  });
+  $('mLeft').addEventListener('click', () => {
+    if (flow.step === 'prepare') { closeFlow(); return; }
+    if (flow.step === 'review') {
+      flow.step = 'measure';
+      flow.questionsDone = false;
+      flow.q = QUESTION_KEYS.length - 1;
+      renderFlow();
+      return;
+    }
+    $('mConfirm').hidden = false;
+  });
+  $('mPhotoInput').addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (flow.photo) URL.revokeObjectURL(flow.photo);
+    flow.photo = URL.createObjectURL(file);
+    e.target.value = '';
+    renderFlow();
+  });
+  $('mDone').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-done]');
+    if (!btn) return;
+    const id = flow.placeId;
+    closeFlow();
+    if (btn.dataset.done === 'done') selectPlace(id);
+    else closePlace();
+  });
 
   // ---------------------------------------------------------------------------
   // Start
