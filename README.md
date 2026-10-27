@@ -14,6 +14,12 @@ If your browser refuses to open it from disk, run this from this folder and open
 python3 -m http.server 8765
 ```
 
+Live version: https://open-air-foundation.github.io/clean-air-spaces-demo/
+
+## Layouts
+
+The switch in the blue bar toggles between **Phone** (the app in a phone frame, simulation controls beside it) and **Desktop** (sidebar with search, filters and list or place details, full-width map, simulation controls as a floating card you can hide). Add `#desktop` or `#phone` to the link to open a layout directly. On screens narrower than 880 px the app always fills the screen in the phone layout.
+
 ## What's in it
 
 - `index.html`, `styles.css`, `app.js`: the page, styles and logic
