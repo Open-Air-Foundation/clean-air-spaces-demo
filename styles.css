@@ -473,8 +473,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .m-btn.ghost { background: none; color: #fff; height: 44px; }
 .m-btn:focus-visible, .m-choice:focus-visible { outline: 3px solid rgba(28, 117, 188, 0.5); outline-offset: 2px; }
 
+/* Two-tone Spot icons (SpotIcon styles): p = primary layer, s = secondary layer, k = stroked shape */
+.spot-icon { flex: none; display: block; --ip: #0675BA; --is: #B0ECFF; }
+.spot-icon.inactive { --ip: #6E7781; --is: #DDE2E7; }
+.spot-icon.reward { --ip: #E39A00; --is: #FFE08A; }
+.spot-icon .p { fill: var(--ip); }
+.spot-icon .s { fill: var(--is); }
+.spot-icon .k { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.spot-icon .p.k { stroke: var(--ip); }
+.spot-icon .s.k { stroke: var(--is); }
+
 .m-place-card { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 18px; background: var(--brand-soft); }
-.m-place-icon { width: 34px; height: 34px; flex: none; fill: none; stroke: var(--brand); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .m-place-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .m-place-text strong { font-size: 17px; }
 .m-place-text span { font-size: 14px; color: var(--ink-2); }
@@ -495,8 +504,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .m-bubble.center { text-align: center; margin-top: 0; }
 .m-bubble.center::before { left: 50%; margin-left: -7px; }
 .m-instructions { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
-.m-instructions li { display: flex; gap: 12px; align-items: flex-start; font-size: 15px; line-height: 1.35; }
-.m-instructions svg { width: 26px; height: 26px; flex: none; fill: none; stroke: var(--brand); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.m-instructions li { display: flex; gap: 14px; align-items: center; font-size: 15px; line-height: 1.35; }
+.m-instructions .spot-icon { width: 34px; }
 .m-note { margin: 0; font-size: 14.5px; }
 .m-footnote { margin: 0; font-size: 12.5px; color: var(--ink-2); line-height: 1.4; }
 
@@ -506,28 +515,45 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .m-sub { margin: -6px 0 0; font-size: 14px; color: var(--ink-2); }
 .m-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .m-rows { display: grid; gap: 8px; }
+/* SpotChoiceTile: tile = centred icon over a footnote label; row = icon, label, radio marker */
 .m-choice {
-  position: relative; border: 1px solid rgba(60, 60, 67, 0.22); background: #fff; border-radius: 14px;
-  text-align: left; font-size: 15px; line-height: 1.3; color: var(--ink);
-  transition: background 0.15s, border-color 0.15s;
+  border: 1px solid var(--tile-stroke, rgba(60, 60, 67, 0.29)); background: #fff; border-radius: 14px;
+  color: var(--ink); transition: background 0.15s, border-color 0.15s, transform 0.12s;
 }
-.m-choice.tile { min-height: 88px; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; }
-.m-choice.row { padding: 13px 40px 13px 14px; }
-.m-choice-icon { width: 26px; height: 26px; fill: none; stroke: var(--brand); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.m-choice-check {
-  position: absolute; right: 10px; top: 10px; width: 20px; height: 20px; border-radius: 50%;
-  background: var(--brand); color: #fff; font-size: 12px; font-weight: 700; display: none; place-items: center;
+.m-choice:active { transform: scale(0.97); }
+.m-choice.tile {
+  min-height: 84px; padding: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; text-align: center; font-size: 13px; line-height: 1.25;
 }
-.m-choice.row .m-choice-check { top: 50%; margin-top: -10px; }
-.m-choice[aria-pressed="true"] { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-ink); font-weight: 600; }
-.m-choice[aria-pressed="true"] .m-choice-check { display: grid; }
-.m-photo { width: 100%; border-radius: 16px; object-fit: cover; max-height: 320px; }
+.m-choice.row { min-height: 52px; padding: 10px 14px; display: flex; align-items: center; gap: 12px; text-align: left; font-size: 16px; }
+.m-choice.row .m-choice-label { flex: 1; min-width: 0; }
+.m-marker { width: 22px; height: 22px; flex: none; color: rgba(60, 60, 67, 0.45); }
+.m-marker svg { width: 100%; height: 100%; display: block; }
+.m-choice[aria-pressed="true"] { background: var(--brand-soft); border: 2px solid var(--brand); color: var(--brand-ink); font-weight: 600; }
+.m-choice.tile[aria-pressed="true"] { padding: 7px; }
+.m-choice.row[aria-pressed="true"] { padding: 9px 13px; }
+.m-choice[aria-pressed="true"] .m-marker { color: var(--brand); }
+
+/* Photo step (SpotSpacePhotoActions) */
 .m-photo-empty {
-  border: 1.5px dashed rgba(60, 60, 67, 0.3); border-radius: 16px; padding: 28px 20px; text-align: center;
-  color: var(--ink-2); display: grid; justify-items: center; gap: 8px;
+  position: relative; overflow: hidden; width: 100%; min-height: 180px; border-radius: 20px;
+  background: var(--brand-soft); border: 2px dashed #B0ECFF; display: grid; place-items: center; cursor: pointer;
 }
-.m-photo-empty svg { width: 40px; height: 40px; fill: none; stroke: var(--brand); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-.m-photo-empty p { margin: 0; font-size: 14px; line-height: 1.4; }
+.m-photo-mascot { position: absolute; right: -10px; bottom: -10px; width: 72px; height: 72px; }
+.m-photo-wrap { position: relative; }
+.m-photo { width: 100%; border-radius: 20px; object-fit: cover; max-height: 340px; display: block; }
+.m-photo-ok {
+  position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 50%;
+  background: #34C759; color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 16px;
+  box-shadow: 0 0 0 2px #fff;
+}
+.m-photo-actions { display: flex; justify-content: space-between; align-items: center; min-height: 44px; }
+.m-photo-actions button { border: 0; background: none; color: var(--brand); font-size: 16px; display: flex; align-items: center; gap: 6px; padding: 0; }
+.m-photo-actions button.danger { color: var(--danger); }
+.m-reward-hint {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px;
+  background: var(--reward-fill); color: var(--reward-ink); font-size: 13.5px; font-weight: 600;
+}
 
 .m-details-done { display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .m-details-done h3 { margin: 0; font-size: 22px; text-align: center; }
@@ -588,28 +614,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .m-done-inner { padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; position: relative; z-index: 1; }
 .m-done h2 { margin: 0; font-size: 28px; }
 .m-done p { margin: 0; color: #D4ECFF; font-size: 16px; line-height: 1.4; }
-.m-level { width: 100%; background: var(--brand-deep); border-radius: 14px; padding: 12px; display: grid; gap: 8px; text-align: left; }
-.m-level > div { display: flex; justify-content: space-between; font-size: 15px; }
-.m-level > div span { font-variant-numeric: tabular-nums; color: #D4ECFF; }
-.m-level i { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.2); overflow: hidden; }
-.m-level b { display: block; height: 100%; border-radius: 4px; background: #FFE08A; animation: m-grow 1s 0.6s ease-out both; }
+/* SpotLevelBar on the hero: caption in white, amber fill on a light-yellow capsule */
+.m-level { width: 100%; background: var(--brand-deep); border-radius: 14px; padding: 12px; display: grid; gap: 6px; text-align: left; }
+.m-level > div { display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.m-level i { height: 8px; border-radius: 4px; background: #FFE08A; overflow: hidden; }
+.m-level b { display: block; height: 100%; border-radius: 4px; background: #E39A00; animation: m-grow 1s 0.6s ease-out both; }
+/* SpotBadgeRow */
 .m-badge {
-  width: 100%; display: flex; gap: 12px; align-items: center; text-align: left;
-  background: #fff; color: var(--ink); border-radius: 14px; padding: 12px; animation: m-pop 0.4s 0.9s both;
+  width: 100%; display: flex; gap: 10px; align-items: center; text-align: left;
+  background: #fff; border-radius: 14px; padding: 10px; animation: m-pop 0.4s 0.9s both;
 }
-.m-badge-icon { width: 40px; height: 40px; border-radius: 50%; background: var(--reward-fill); display: grid; place-items: center; flex: none; }
-.m-badge-icon svg { width: 22px; height: 22px; fill: var(--reward); }
-.m-badge strong { display: block; font-size: 15px; }
-.m-badge span { font-size: 13px; color: var(--ink-2); }
-.m-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.m-confetti i {
-  position: absolute; top: -12px; width: 8px; height: 12px; border-radius: 2px; opacity: 0;
-  animation: m-fall 3.2s ease-in both;
-}
-@keyframes m-fall {
-  0% { opacity: 1; transform: translate(0, 0) rotate(0); }
-  100% { opacity: 0; transform: translate(var(--drift), 640px) rotate(540deg); }
-}
+.m-badge strong { display: block; font-size: 15px; color: var(--reward-ink); }
+.m-badge span { font-size: 12.5px; color: var(--ink-2); }
+.m-confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
 
 /* ---------- Layout switch in the brand bar ---------- */
 .view-toggle {

@@ -24,6 +24,8 @@ The switch in the blue bar toggles between **Phone** (the app in a phone frame, 
 
 Open a place and tap **Measure** to run a simulated AirGradient Go indoor measurement, following the iOS flow without the outdoor, calibration and place-type steps: prepare, six questions while Go settles (15 s) and collects 10 readings (every 3 s), review, submit, and the success screen with level and badges. Readings follow the place's current indoor estimate, so the outdoor slider affects them. "Fast measurement" in the simulation panel runs it in about 10 seconds.
 
+Taking a photo always uses the same sample photo (`assets/dummy-photo.jpg`, from the AirGradient website), and the public profile name starts as "CleanAirCM". The answer and place icons are the app's own two-tone Spot icons (`data/spot-icons.js`, converted from `apps/mobile/ios/Scripts/generate_spot_symbols.py`), with simple stand-ins where the app uses SF Symbols. The confetti is a port of `SpotConfettiView`.
+
 Submissions, points and badges are kept in the viewer's browser only. Submitted measurements show on the place as "Awaiting review" and don't change the estimate.
 
 ## What's in it

@@ -1159,7 +1159,8 @@
   const FAST = { settle: 3, interval: 0.7 };
   const LEVEL_THRESHOLDS = [0, 20, 60, 150, 300];
   const QUESTION_KEYS = ['area', 'occupancy', 'doors', 'purifier', 'activities', 'photo'];
-  const FALLBACK_ANSWERS = ['other', 'unknown', 'none_noticed'];
+  const DUMMY_PHOTO = 'assets/dummy-photo.jpg';
+  const DEFAULT_PROFILE_NAME = 'CleanAirCM';
 
   const QUESTION_TITLE = {
     area: 'Which part of the place are you measuring in?',
@@ -1188,27 +1189,42 @@
     source_candles: 'Candles, incense or other burning', source_dust: 'Construction or other dust-producing work',
     source_exhaust: 'Running vehicles / exhaust',
   };
-  const people = (n) => Array.from({ length: n }, (_, i) => {
-    const x = 12 + (i - (n - 1) / 2) * 6;
-    return `M${x} ${n > 2 ? 10.5 : 9.5}m-2.3 0a2.3 2.3 0 1 0 4.6 0a2.3 2.3 0 1 0-4.6 0M${x - 3.6} 19a3.6 3.6 0 0 1 7.2 0`;
-  }).join('');
+  // Answer icons as in SpotAnswerGlyphs.swift. Area answers have none and show as plain rows.
   const ANSWER_GLYPH = {
-    seating: 'M7 4v9h10M7 13v7M17 13v7M7 9h10', separate_room: 'M6 21V4h12v17M3 21h18M14 12.5h.01',
-    counter: 'M4 11h16v9H4zM7 11V5h10v6M9 8h6', covered_outdoor: 'M3 12a9 9 0 0 1 18 0ZM12 12v6a2 2 0 0 1-4 0',
-    concourse: 'M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6', food_court: 'M7 3v18M4.5 3v5a2.5 2.5 0 0 0 5 0V3M17 21V3c-2.2 1.2-3.5 4-3.5 8H17',
-    shop: 'M5.5 8h13l-1 12.5h-11L5.5 8ZM9 8V6.5a3 3 0 0 1 6 0V8', lobby: 'M3 21h18M5 21V8l7-4 7 4v13M10 21v-5h4v5',
-    waiting_area: 'M5 11v8M19 11v8M5 15h14M8 11V7h8v4', main_area: 'M4 4h16v16H4zM4 12h16M12 4v16',
-    only_me: people(1), mostly_empty: people(2), half_full: people(3), mostly_full: 'M4 9.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0M10 9.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0M16 9.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0M3 19a3 3 0 0 1 6 0M9 19a3 3 0 0 1 6 0M15 19a3 3 0 0 1 6 0',
-    open_continuously: 'M4 21V4h9v17M13 4l6 2v13l-6 2M3 21h18', open_frequently: 'M4 21V4h9v17M13 4l6 2v13l-6 2M16 10l2 2-2 2',
-    closed_throughout: 'M6 21V4h12v17M3 21h18M14 12.5h.01', no_outside_openings: 'M4 4h16v16H4zM8 8l8 8M16 8l-8 8',
-    purifier_running: 'M7 3h10v18H7zM10 8h4M10 12h4M10 16h4M20 8c1 1.3 1 2.7 0 4M2.5 8c-1 1.3-1 2.7 0 4',
-    purifier_off: 'M7 3h10v18H7zM10 8h4M10 12h4M10 16h4', purifier_unsure: 'M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17.5v.5',
-    source_cooking: 'M3 11h13a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4ZM16 11h5M8 7.5c0-1 1-1 1-2.5M12 7.5c0-1 1-1 1-2.5',
-    source_smoking: 'M3 15h14v3H3zM19.5 15v3M17 11c0-2 2-2 2-4M21 11c0-2-1-3-1-4',
-    source_candles: 'M9 21V11h6v10M12 11V8.5M12 3.5c1.2 1.6 1.4 2.8 0 4.2c-1.4-1.4-1.2-2.6 0-4.2',
-    source_dust: 'M3 20h18M6 20l3-9h6l3 9M9 11l1-4h4l1 4', source_exhaust: 'M5 16h14l-1.5-5h-11L5 16ZM5 16v3M19 16v3M2 11h2',
-    other: 'M5 12h.01M12 12h.01M19 12h.01',
+    only_me: 'spot.occupancy.alone', mostly_empty: 'spot.occupancy.empty', half_full: 'spot.occupancy.some',
+    mostly_full: 'spot.occupancy.crowded', open_continuously: 'spot.doors.open', open_frequently: 'spot.doors.often',
+    closed_throughout: 'spot.doors.closed', no_outside_openings: 'spot.doors.none', purifier_running: 'spot.purifier',
+    purifier_off: 'sys.power.circle', purifier_unsure: 'sys.question.circle', source_cooking: 'spot.activity.cooking',
+    source_smoking: 'spot.activity.smoking', source_candles: 'spot.activity.burning', source_dust: 'spot.activity.construction',
+    source_exhaust: 'spot.activity.vehicles', other: 'spot.answer.other', none_noticed: 'sys.check.circle',
   };
+  // Place icons as in SpotSpaceType.glyph.
+  const PLACE_GLYPH = {
+    cafe: 'spot.place.coffee', restaurant: 'spot.place.restaurant', bar: 'spot.place.bar', mall: 'spot.place.mall',
+    shop: 'spot.place.shop', supermarket: 'spot.place.supermarket', gym: 'spot.place.gym', coworking: 'spot.indoor',
+    library: 'sys.books', hotel: 'sys.bed', hospital: 'sys.cross.case', clinic: 'sys.cross.case', cinema: 'sys.film',
+    theatre: 'sys.masks', museum: 'sys.columns', sportsCentre: 'sys.court', other: 'spot.answer.other',
+  };
+  // Stand-ins for the SF Symbols the app uses, drawn in the same two-tone style on the 48-unit grid.
+  const SYSTEM_ICONS = {
+    'sys.power.circle': '<circle class="s" cx="24" cy="24" r="20"/><path class="p k" d="M24 13v10" stroke-width="4"/><path class="p k" d="M17 17.2a10 10 0 1 0 14 0" stroke-width="4"/>',
+    'sys.question.circle': '<circle class="s" cx="24" cy="24" r="20"/><path class="p k" d="M18.8 19a5.3 5.3 0 1 1 7.4 4.9c-1.3.6-2.2 1.6-2.2 3.1v1" stroke-width="4"/><circle class="p" cx="24" cy="34.5" r="2.6"/>',
+    'sys.check.circle': '<circle class="s" cx="24" cy="24" r="20"/><path class="p k" d="M15 24.5l6.5 6.5L33.5 18" stroke-width="4.5"/>',
+    'sys.wind': '<path class="p k" d="M6 19h21a6 6 0 1 0-6-6" stroke-width="4"/><path class="s k" d="M6 27h28a6 6 0 1 1-6 6" stroke-width="4"/><path class="p k" d="M6 35h11" stroke-width="4"/>',
+    'sys.books': '<rect class="p" x="6" y="8" width="9" height="34" rx="3"/><rect class="s" x="17" y="12" width="9" height="30" rx="3"/><path class="p" d="M29 13.5l7.5-2 7 29-7.5 2z"/>',
+    'sys.bed': '<rect class="p" x="4" y="12" width="5" height="30" rx="2.5"/><rect class="s" x="12" y="17" width="12" height="8" rx="4"/><rect class="p" x="4" y="27" width="40" height="9" rx="3"/><rect class="p" x="39" y="30" width="5" height="12" rx="2.5"/>',
+    'sys.cross.case': '<path class="p k" d="M18 13V9.5a2.5 2.5 0 0 1 2.5-2.5h7a2.5 2.5 0 0 1 2.5 2.5V13" stroke-width="3.5"/><rect class="p" x="4" y="13" width="40" height="29" rx="7"/><path class="s" d="M21 19h6v6h6v6h-6v6h-6v-6h-6v-6h6z"/>',
+    'sys.film': '<rect class="p" x="6" y="7" width="36" height="34" rx="6"/><rect class="s" x="14" y="13" width="20" height="22" rx="3"/><circle class="s" cx="10" cy="14" r="1.8"/><circle class="s" cx="10" cy="24" r="1.8"/><circle class="s" cx="10" cy="34" r="1.8"/><circle class="s" cx="38" cy="14" r="1.8"/><circle class="s" cx="38" cy="24" r="1.8"/><circle class="s" cx="38" cy="34" r="1.8"/>',
+    'sys.masks': '<path class="s" d="M21 16h21v11a10.5 10.5 0 0 1-21 0z"/><path class="p" d="M6 8h21v11a10.5 10.5 0 0 1-21 0z"/>',
+    'sys.columns': '<path class="p" d="M24 4l20 10H4z"/><rect class="s" x="8" y="17" width="5" height="19" rx="2"/><rect class="s" x="16.5" y="17" width="5" height="19" rx="2"/><rect class="s" x="26.5" y="17" width="5" height="19" rx="2"/><rect class="s" x="35" y="17" width="5" height="19" rx="2"/><rect class="p" x="4" y="38" width="40" height="6" rx="3"/>',
+    'sys.court': '<rect class="p" x="4" y="10" width="40" height="28" rx="6"/><rect class="s" x="8" y="14" width="32" height="20" rx="3"/><rect class="p" x="22.5" y="14" width="3" height="20" rx="1.5"/><circle class="p" cx="24" cy="24" r="4.5"/>',
+  };
+  // Two-tone Spot icon: "active" in the brand blues, "inactive" in greys (SpotIcon.Style).
+  function spotIcon(name, style = 'active', size = 28) {
+    const shapes = (window.SPOT_ICONS && window.SPOT_ICONS[name]) || SYSTEM_ICONS[name];
+    if (!shapes) return '';
+    return `<svg class="spot-icon ${style}" viewBox="0 0 48 48" width="${size}" height="${size}" aria-hidden="true">${shapes}</svg>`;
+  }
 
   function spaceTypeOf(p) {
     const byKind = {
@@ -1247,14 +1263,12 @@
   const flow = { open: false };
   let flowTimer = null;
 
-  const svgIcon = (d, cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
   const flowPlace = () => byId.get(flow.placeId);
   const flowSpeed = () => ($('fastToggle').checked ? FAST : { settle: SETTLE_S, interval: INTERVAL_S });
   const meanOf = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
   const tintFill = (color) => `color-mix(in srgb, ${color} 24%, #fff)`;
 
   function startFlow(id) {
-    if (flow.photo) URL.revokeObjectURL(flow.photo);
     Object.assign(flow, {
       open: true, placeId: id, type: spaceTypeOf(byId.get(id)), step: 'prepare', phase: 'idle',
       samples: [], q: 0, answers: { activities: [] }, photo: null, questionsDone: false,
@@ -1270,7 +1284,7 @@
     clearInterval(flowTimer);
     flowTimer = null;
     flow.open = false;
-    if (flow.photo) { URL.revokeObjectURL(flow.photo); flow.photo = null; }
+    flow.photo = null;
     $('measure').hidden = true;
     $('mConfirm').hidden = true;
     $('mDone').hidden = true;
@@ -1373,46 +1387,63 @@
   }
 
   function prepareHTML(p) {
-    const icon = (GROUPS.find((g) => g.id === p.group) || {}).icon;
-    return `<div class="m-place-card">${icon ? svgIcon(icon, 'm-place-icon') : ''}` +
+    return `<div class="m-place-card">${spotIcon(PLACE_GLYPH[flow.type] || PLACE_GLYPH.other, 'active', 38)}` +
       `<div class="m-place-text"><strong>${esc(p.name)}</strong><span>${esc(KIND_LABEL[p.kind] || 'Place')}</span></div>` +
       `<div class="m-mascot-64" id="mPrepMascot"></div></div>` +
       `<h3 class="m-title">Ready to measure</h3>` +
       `<div class="m-bubble">Place Go where you want to check the air.</div>` +
       `<ul class="m-instructions">` +
-      `<li>${svgIcon('M8.5 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM10 7h4M10 10h4')}<span>Keep Go still with its air openings clear.</span></li>` +
-      `<li>${svgIcon('M3 8h11a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h7')}<span>Keep it away from your breath, vents, and other direct sources of airflow.</span></li>` +
-      `<li>${svgIcon('M12 8v4l3 2M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM9.5 2.5h5')}<span>Go will settle for ${SETTLE_S} seconds, then collect ${SAMPLE_TARGET} readings.</span></li>` +
+      `<li>${spotIcon('spot.go.still', 'active', 30)}<span>Keep Go still with its air openings clear.</span></li>` +
+      `<li>${spotIcon('sys.wind', 'active', 30)}<span>Keep it away from your breath, vents, and other direct sources of airflow.</span></li>` +
+      `<li>${spotIcon('spot.settle', 'active', 30)}<span>Go will settle for ${SETTLE_S} seconds, then collect ${SAMPLE_TARGET} readings.</span></li>` +
       `</ul>` +
       `<p class="m-note">You can answer questions about the space and take a photo while Go measures.</p>` +
       `<p class="m-footnote">Keep the app open until measurement finishes.</p>`;
   }
 
+  // SpotChoiceTile: a centred icon tile in the grid, or a full-width row with a radio marker.
   function choiceHTML(key, option, layout) {
     const selected = key === 'activities' ? flow.answers.activities.includes(option) : flow.answers[key] === option;
     const glyph = ANSWER_GLYPH[option];
+    const icon = glyph ? spotIcon(glyph, selected ? 'active' : 'inactive', layout === 'tile' ? 32 : 26) : '';
+    const marker = layout === 'row'
+      ? `<span class="m-marker" aria-hidden="true">${selected ? '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M7.5 12.3l3 3 6-6.3" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>'}</span>`
+      : '';
     return `<button type="button" class="m-choice ${layout}" data-answer="${option}" aria-pressed="${selected}">` +
-      (layout === 'tile' && glyph ? svgIcon(glyph, 'm-choice-icon') : '') +
-      `<span>${esc(ANSWER_LABEL[option] || option)}</span><span class="m-choice-check" aria-hidden="true">✓</span></button>`;
+      `${icon}<span class="m-choice-label">${esc(ANSWER_LABEL[option] || option)}</span>${marker}</button>`;
+  }
+
+  function photoStepHTML() {
+    const bubble = '<div class="m-bubble">Help others recognize where you measured. Avoid identifiable people.</div>';
+    const hint = `<div class="m-reward-hint">${spotIcon('spot.reward.points', 'reward', 22)}<span>A photo makes your measurement easier to review</span></div>`;
+    if (!flow.photo) {
+      return bubble +
+        `<button type="button" class="m-photo-empty" data-flow="photo" aria-label="Take photo">${spotIcon('spot.photo', 'active', 56)}` +
+        `<span class="m-photo-mascot" id="mPhotoMascot" aria-hidden="true"></span></button>` + hint;
+    }
+    return bubble +
+      `<div class="m-photo-wrap"><img class="m-photo" src="${flow.photo}" alt="Your photo of the space"><span class="m-photo-ok" aria-hidden="true">✓</span></div>` +
+      `<div class="m-photo-actions"><button type="button" data-flow="photo">${spotIcon('spot.photo', 'active', 20)}Retake photo</button>` +
+      `<button type="button" class="danger" data-flow="remove-photo">Remove photo</button></div>` + hint;
   }
 
   function questionHTML() {
     const key = QUESTION_KEYS[flow.q];
     let html = `<div class="m-qprog">Question ${flow.q + 1} of ${QUESTION_KEYS.length}</div>` +
       `<div class="m-qhead"><h3>${esc(QUESTION_TITLE[key])}</h3>${key === 'photo' ? '' : '<div class="m-mascot-58" id="mQMascot"></div>'}</div>`;
-    if (key === 'photo') {
-      html += flow.photo
-        ? `<img class="m-photo" src="${flow.photo}" alt="Your photo of the space">`
-        : `<div class="m-photo-empty">${svgIcon('M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z')}<p>Help others recognize where you measured. Avoid identifiable people.</p></div>`;
-      return html;
-    }
+    if (key === 'photo') return html + photoStepHTML();
     const options = answerOptions(key);
-    const main = options.filter((o) => !FALLBACK_ANSWERS.includes(o) || (key === 'activities' && o === 'other'));
-    const useGrid = key === 'activities' || (main.length <= 4 && main.every((o) => ANSWER_GLYPH[o]));
+    // Same split as the app: activity sources (and "other") as tiles; elsewhere a grid only when
+    // every main answer has an icon and there are at most four. "Not sure" always sits apart as a row.
+    const tiles = key === 'activities'
+      ? options.filter((o) => o.startsWith('source_') || o === 'other')
+      : (() => {
+        const main = options.filter((o) => o !== 'unknown');
+        return main.length <= 4 && main.every((o) => ANSWER_GLYPH[o]) ? main : [];
+      })();
     if (key === 'activities') html += '<p class="m-sub">Select any you noticed. Leave blank if not reported.</p>';
-    if (useGrid) html += `<div class="m-grid">${main.map((o) => choiceHTML(key, o, 'tile')).join('')}</div>`;
-    const rows = useGrid ? options.filter((o) => !main.includes(o)) : options;
-    html += `<div class="m-rows">${rows.map((o) => choiceHTML(key, o, 'row')).join('')}</div>`;
+    if (tiles.length) html += `<div class="m-grid">${tiles.map((o) => choiceHTML(key, o, 'tile')).join('')}</div>`;
+    html += `<div class="m-rows">${options.filter((o) => !tiles.includes(o)).map((o) => choiceHTML(key, o, 'row')).join('')}</div>`;
     return html;
   }
 
@@ -1450,8 +1481,8 @@
   function saveSubmissions(list) {
     try { localStorage.setItem('cas-submissions', JSON.stringify(list)); } catch (e) { /* storage unavailable */ }
   }
-  let profileName = '';
-  try { profileName = localStorage.getItem('cas-profile-name') || ''; } catch (e) { /* storage unavailable */ }
+  let profileName = DEFAULT_PROFILE_NAME;
+  try { profileName = localStorage.getItem('cas-profile-name') || DEFAULT_PROFILE_NAME; } catch (e) { /* storage unavailable */ }
 
   function reviewHTML() {
     const p = flowPlace();
@@ -1508,9 +1539,7 @@
       const isPhoto = QUESTION_KEYS[flow.q] === 'photo';
       foot = isPhoto && !flow.photo
         ? '<button type="button" class="m-btn primary" data-flow="photo">Take photo</button><button type="button" class="m-btn secondary" data-flow="next">Continue without photo</button>'
-        : isPhoto
-          ? '<button type="button" class="m-btn primary" data-flow="next">Continue</button><button type="button" class="m-btn secondary" data-flow="photo">Retake photo</button>'
-          : '<button type="button" class="m-btn primary" data-flow="next">Continue</button>';
+        : '<button type="button" class="m-btn primary" data-flow="next">Continue</button>';
     } else if (flow.step === 'measure') {
       html = detailsDoneHTML();
     } else {
@@ -1524,6 +1553,7 @@
     mountMascot($('mPrepMascot'), 'mascot_reading');
     mountMascot($('mQMascot'), QUESTION_KEYS[flow.q] === 'doors' ? 'mascot_stay_indoors' : 'mascot_idea');
     mountMascot($('mDetailsMascot'), 'mascot_reading');
+    mountMascot($('mPhotoMascot'), 'mascot_idea');
     if (flow.step === 'review') mountMascot($('mReviewMascot'), pmBand(captureMeans().pm).mascot);
   }
 
@@ -1582,24 +1612,57 @@
     clearInterval(flowTimer);
     $('measure').hidden = true;
     const unlocked = after.badges.filter((b) => !before.badges.includes(b));
-    const colors = ['#58D32F', '#FFDA3E', '#FF9300', '#FFFFFF', '#B0ECFF', '#E39A00'];
-    const confetti = reducedMotion ? '' : Array.from({ length: 36 }, (_, i) =>
-      `<i style="left:${(i * 37) % 100}%;background:${colors[i % colors.length]};animation-delay:${(i % 9) * 0.12}s;--drift:${((i * 53) % 60) - 30}px"></i>`).join('');
     const done = $('mDone');
     done.innerHTML =
-      `<div class="m-confetti" aria-hidden="true">${confetti}</div>` +
       `<div class="m-done-inner">` +
       `<div class="m-mascot-170" id="mDoneMascot"></div>` +
       `<h2>Measurement submitted</h2>` +
       `<p>Thanks for measuring ${esc(p.name)}. Our team reviews it before it appears on the map.</p>` +
-      `<div class="m-level"><div><strong>Level ${after.level}</strong><span>${after.next ? `${after.points} / ${after.next} points` : `${after.points} points`}</span></div>` +
-      `<i><b style="width:${Math.max(4, after.progress * 100)}%"></b></i></div>` +
-      unlocked.map((b) => `<div class="m-badge"><span class="m-badge-icon">${svgIcon(STAR_PATH)}</span><div><strong>Badge unlocked: ${BADGES[b][0]}</strong><span>${BADGES[b][1]}</span></div></div>`).join('') +
+      `<div class="m-level"><div><span>Level ${after.level}</span><span>${after.next ? `${after.points} / ${after.next} points` : ''}</span></div>` +
+      `<i><b style="width:${Math.min(1, Math.max(0, after.progress)) * 100}%"></b></i></div>` +
+      unlocked.map((b) => `<div class="m-badge">${spotIcon('spot.reward.badge', 'reward', 36)}<div><strong>Badge unlocked: ${BADGES[b][0]}</strong><span>${BADGES[b][1]}</span></div></div>`).join('') +
       `<button type="button" class="m-btn white" data-done="another">Measure another place</button>` +
       `<button type="button" class="m-btn ghost" data-done="done">Done</button>` +
-      `</div>`;
+      `</div>` +
+      `<canvas class="m-confetti" id="mConfetti" aria-hidden="true"></canvas>`;
     done.hidden = false;
     mountMascot($('mDoneMascot'), 'mascot_mission');
+    confettiBurst($('mConfetti'));
+  }
+
+  // One confetti burst, ported from SpotConfettiView.swift: 90 pieces thrown up from 30% height,
+  // falling under gravity, spinning and flipping, fading out over 2.5 s. Nothing under reduced motion.
+  function confettiBurst(canvas) {
+    if (reducedMotion || !canvas) return;
+    const COUNT = 90, DURATION = 2.5, GRAVITY = 900;
+    const COLORS = ['#FFCC00', '#FF9500', '#FFFFFF', '#B0ECFF', '#34C759', '#FCD9E0'];
+    const rand = (a, b) => a + Math.random() * (b - a);
+    const pieces = Array.from({ length: COUNT }, (_, i) => ({
+      vx: rand(-320, 320), vy: rand(-720, -260), spin: rand(-9, 9),
+      w: rand(6, 11), h: rand(9, 15), color: COLORS[i % COLORS.length],
+    }));
+    const ctx = canvas.getContext('2d');
+    const start = performance.now();
+    const frame = (now) => {
+      const t = (now - start) / 1000;
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      if (canvas.width !== w * dpr || canvas.height !== h * dpr) { canvas.width = w * dpr; canvas.height = h * dpr; }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      if (t >= DURATION || !canvas.isConnected) return;
+      ctx.globalAlpha = 1 - t / DURATION;
+      for (const p of pieces) {
+        ctx.save();
+        ctx.translate(w * 0.5 + p.vx * t, h * 0.3 + p.vy * t + (GRAVITY * t * t) / 2);
+        ctx.rotate(p.spin * t);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * Math.abs(Math.cos(p.spin * t)));
+        ctx.restore();
+      }
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
   }
 
   // Saved submissions from earlier visits show as "Awaiting review" on their places.
@@ -1616,7 +1679,9 @@
       switch (action.dataset.flow) {
         case 'start': startCapture(); break;
         case 'next': nextQuestion(); break;
-        case 'photo': $('mPhotoInput').click(); break;
+        // The prototype "takes" the same sample photo every time.
+        case 'photo': flow.photo = DUMMY_PHOTO; renderFlow(); break;
+        case 'remove-photo': flow.photo = null; renderFlow(); break;
         case 'submit': submitFlow(); break;
         default: break;
       }
@@ -1647,14 +1712,6 @@
       return;
     }
     $('mConfirm').hidden = false;
-  });
-  $('mPhotoInput').addEventListener('change', (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    if (flow.photo) URL.revokeObjectURL(flow.photo);
-    flow.photo = URL.createObjectURL(file);
-    e.target.value = '';
-    renderFlow();
   });
   $('mDone').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-done]');
