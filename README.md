@@ -33,7 +33,7 @@ Submissions, points and badges are kept in the viewer's browser only. Submitted 
 - `index.html`, `styles.css`, `app.js`: the page, styles and logic
 - `data/places.js`: 300 real places in central Chiang Mai from OpenStreetMap (© OpenStreetMap contributors, ODbL)
 - `data/mascots.js`: Lottie mascot animations copied from the Android app resources
-- `assets/logo_white.png`: AirGradient logo from the Android app resources
+- `assets/openair-foundation-logo.png`: Open Air Foundation logo from openair.foundation (shown in white on the teal header)
 
 ## How the simulation works
 

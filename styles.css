@@ -39,16 +39,21 @@ body {
 button { font: inherit; color: inherit; cursor: pointer; }
 [hidden] { display: none !important; }
 
-/* ---------- Brand bar (page chrome, AirGradient website style) ---------- */
-.brandbar { background: var(--brand); color: #fff; }
+/* ---------- Brand bar (page chrome, Open Air Foundation brand from openair.foundation) ---------- */
+.brandbar {
+  --oaf-teal: #0097B2; --oaf-navy: #153A52;
+  background: var(--oaf-teal); color: #fff;
+  font-family: "Avenir Next", "Segoe UI", var(--font-brand);
+}
 .brandbar-inner {
   max-width: 1180px; margin: 0 auto;
   padding: 10px max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap; position: relative;
 }
-.brand-logo { height: 30px; width: auto; }
-.brand-divider { width: 1px; height: 22px; background: rgba(255, 255, 255, 0.4); }
-.brand-title { font-family: var(--font-brand); font-weight: 600; font-size: 19px; letter-spacing: 0.01em; }
+/* The site's teal logo, shown in white on the teal bar */
+.brand-logo { height: 32px; width: auto; filter: brightness(0) invert(1); }
+.brand-divider { width: 1px; height: 24px; background: rgba(255, 255, 255, 0.45); }
+.brand-title { font-weight: 600; font-size: 19px; letter-spacing: 0.01em; }
 /* Centred in the bar, in the Spot warning orange so nobody mistakes the values for real ones */
 .brand-pill {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: nowrap;
@@ -635,10 +640,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .view-toggle button {
   display: flex; align-items: center; gap: 6px; border: 0; background: none; color: #fff;
-  font: 600 13px var(--font-brand); padding: 5px 12px; border-radius: 999px;
+  font-weight: 600; font-size: 13px; padding: 5px 12px; border-radius: 999px;
 }
 .view-toggle svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.view-toggle button[aria-pressed="true"] { background: #fff; color: var(--brand-ink); }
+.view-toggle button[aria-pressed="true"] { background: #fff; color: var(--oaf-navy, #153A52); }
 .view-toggle button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
 /* ---------- Desktop layout: sidebar + full map, simulation as a floating card ---------- */
