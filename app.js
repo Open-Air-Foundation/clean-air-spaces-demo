@@ -685,7 +685,7 @@
 
   function renderList() {
     const body = $('sheetBody');
-    const full = state.sheet === 'full';
+    const full = state.sheet === 'full' || isDesktop();
     const groupLabel = state.group === 'all' ? 'spaces' : GROUPS.find((g) => g.id === state.group).label.toLowerCase();
     if (!full) {
       const items = cleanestNearby(2);
@@ -897,6 +897,10 @@
   }
 
   function mapPadding() {
+    if (isDesktop()) {
+      const panelOpen = !$('panel').classList.contains('collapsed');
+      return { top: 60, bottom: 60, left: 60, right: panelOpen ? 400 : 60 };
+    }
     const appH = $('app').clientHeight;
     const sheetH = state.sheet === 'peek' ? 216 : appH * (state.sheet === 'place' ? 0.64 : 0.74);
     return { top: state.sheet === 'peek' ? 250 : 110, bottom: sheetH + 10, left: 20, right: 20 };
@@ -1088,10 +1092,48 @@
     if (!e.target.closest('#searchBox')) results.hidden = true;
   });
 
-  // Simulation drawer on phones
+  // Simulation controls: a drawer on phones, a collapsible floating card in the desktop layout
   function closePanelDrawer() { $('panel').classList.remove('open'); }
-  $('panelOpen').addEventListener('click', () => $('panel').classList.add('open'));
-  $('panelClose').addEventListener('click', closePanelDrawer);
+  $('panelOpen').addEventListener('click', () => {
+    $('panel').classList.add('open');
+    $('panel').classList.remove('collapsed');
+  });
+  $('panelClose').addEventListener('click', () => {
+    closePanelDrawer();
+    $('panel').classList.add('collapsed');
+  });
+
+  // Layout switch in the brand bar. #desktop or #phone in the link opens that layout.
+  const wideScreen = window.matchMedia('(min-width: 880px)');
+  function isDesktop() {
+    return document.body.classList.contains('desktop') && wideScreen.matches;
+  }
+  function setView(view, remember) {
+    document.body.classList.toggle('desktop', view === 'desktop');
+    document.querySelectorAll('.view-toggle button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === view)));
+    if (remember) {
+      try { localStorage.setItem('cas-view', view); } catch (e) { /* storage unavailable */ }
+      history.replaceState(null, '', `#${view}`);
+    }
+    if (state.sheet === 'full' && view === 'desktop') state.sheet = 'peek';
+    renderAll();
+    requestAnimationFrame(() => { if (mapReady) map.resize(); });
+  }
+  document.querySelector('.view-toggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-view]');
+    if (btn) setView(btn.dataset.view, true);
+  });
+  wideScreen.addEventListener('change', () => {
+    renderAll();
+    requestAnimationFrame(() => { if (mapReady) map.resize(); });
+  });
+  let savedView = null;
+  try { savedView = localStorage.getItem('cas-view'); } catch (e) { /* storage unavailable */ }
+  const hashView = ['desktop', 'phone'].includes(location.hash.slice(1)) ? location.hash.slice(1) : null;
+  document.body.classList.toggle('desktop', (hashView || savedView) === 'desktop');
+  document.querySelectorAll('.view-toggle button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === (hashView || savedView || 'phone'))));
+  map.resize();
+  new ResizeObserver(() => map.resize()).observe($('map'));
 
   // ---------------------------------------------------------------------------
   // Start
